@@ -31,10 +31,20 @@ func main() {
 	}
 
 	runSayHello(helloAdapter, "Víctor reis")
+	runManyHello(helloAdapter, "Víctor reis")
 }
 
 func runSayHello(adapter *hello.HelloAdapter, name string) {
 	greet, err := adapter.SayHello(context.Background(), name)
+	if err != nil {
+		log.Fatalln("Erro ao chamar o serviço de hello, err:", err)
+	}
+
+	log.Println("Resposta do serviço de hello:", greet.Message)
+}
+
+func runManyHello(adapter *hello.HelloAdapter, name string) {
+	greet, err := adapter.SayManyHello(context.Background(), name)
 	if err != nil {
 		log.Fatalln("Erro ao chamar o serviço de hello, err:", err)
 	}
