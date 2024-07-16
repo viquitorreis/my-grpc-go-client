@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"time"
 
 	"github.com/viquitorreis/my-grpc-go-client/internal/port"
 	"github.com/viquitorreis/my-grpc-proto/protogen/go/hello"
@@ -63,4 +64,29 @@ func (a *HelloAdapter) SayManyHello(ctx context.Context, name string) (*hello.He
 	}
 
 	return nil, nil
+}
+
+func (a *HelloAdapter) SayHelloToEveryone(ctx context.Context, names []string) {
+	greetStream, err := a.helloClient.SayHelloToEveryone(ctx)
+	if err != nil {
+		log.Fatalln("Erro ao chamar o serviço SdayHelloToEveryone, err:", err)
+	}
+
+	// loop para enviar as mensagens para o servidor
+	for _, name := range names {
+		req := &hello.HelloRequest{
+			Name: name,
+		}
+
+		greetStream.Send(req)
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// fechando o stream
+	res, err := greetStream.CloseAndRecv()
+	if err != nil {
+		log.Fatalln("Erro ao fechar o stream, err:", err)
+	}
+
+	log.Println("Mensagem do servidor:", res.Message)
 }
