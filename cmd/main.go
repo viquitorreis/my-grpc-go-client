@@ -30,9 +30,7 @@ func main() {
 		log.Fatal("Erro ao criar o adapter de hello, err:", err)
 	}
 
-	// runSayHello(helloAdapter, "Víctor reis")
-	// runManyHello(helloAdapter, "Víctor reis")
-	runSayHelloToEveryone(helloAdapter, []string{"Víctor", "Reis", "Cícero", "César", "Pompeu"})
+	runSayHelloContinuous(helloAdapter, []string{"Víctor", "Reis", "Cícero", "César", "Pompeu"})
 }
 
 func runSayHello(adapter *hello.HelloAdapter, name string) {
@@ -55,4 +53,8 @@ func runManyHello(adapter *hello.HelloAdapter, name string) {
 
 func runSayHelloToEveryone(adapter *hello.HelloAdapter, names []string) {
 	adapter.SayHelloToEveryone(context.Background(), names)
+}
+
+func runSayHelloContinuous(adapter *hello.HelloAdapter, names []string) {
+	adapter.SayHelloContinuous(context.Background(), names)
 }

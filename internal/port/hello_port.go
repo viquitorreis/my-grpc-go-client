@@ -11,4 +11,5 @@ type HelloClientPort interface {
 	SayHello(ctx context.Context, in *hello.HelloRequest, opts ...grpc.CallOption) (*hello.HelloResponse, error)
 	SayManyHello(ctx context.Context, in *hello.HelloRequest, opts ...grpc.CallOption) (hello.HelloService_SayManyHelloClient, error)
 	SayHelloToEveryone(ctx context.Context, opts ...grpc.CallOption) (hello.HelloService_SayHelloToEveryoneClient, error)
+	SayHelloContinuous(ctx context.Context, opts ...grpc.CallOption) (hello.HelloService_SayHelloContinuousClient, error)
 }

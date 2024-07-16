@@ -90,3 +90,46 @@ func (a *HelloAdapter) SayHelloToEveryone(ctx context.Context, names []string) {
 
 	log.Println("Mensagem do servidor:", res.Message)
 }
+
+func (a *HelloAdapter) SayHelloContinuous(ctx context.Context, names []string) {
+	greetStream, err := a.helloClient.SayHelloContinuous(ctx)
+	if err != nil {
+		log.Fatalln("Erro ao chamar o serviço SayHelloContinuous, err:", err)
+	}
+
+	greetChan := make(chan struct{})
+
+	// goroutine para fazer loop nos nomes e criar uma HelloRequest para enviar ao servidor para cada nome
+	go func() {
+		for _, name := range names {
+			req := &hello.HelloRequest{
+				Name: name,
+			}
+
+			// enviando a mensagem para o servidor
+			greetStream.Send(req)
+		}
+
+		// fechando o stream
+		greetStream.CloseSend()
+	}()
+
+	go func() {
+		for {
+			res, err := greetStream.Recv()
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				log.Fatalln("Erro ao receber a mensagem do servidor, err:", err)
+			}
+
+			log.Println("Mensagem do servidor:", res.Message)
+		}
+		close(greetChan)
+	}()
+
+	// aguardando o fechamento do canal
+	<-greetChan
+}
