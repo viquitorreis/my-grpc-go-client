@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math/rand"
 
+	"github.com/viquitorreis/my-grpc-go-client/internal/adapter/bank"
 	"github.com/viquitorreis/my-grpc-go-client/internal/adapter/hello"
+	domainBank "github.com/viquitorreis/my-grpc-go-client/internal/application/domain/bank"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -24,13 +28,50 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Create a new adapter
-	helloAdapter, err := hello.NewHelloAdapter(conn)
+	bankAdapter, err := bank.NewBankAdapter(conn)
 	if err != nil {
-		log.Fatal("Erro ao criar o adapter de hello, err:", err)
+		log.Fatal("Erro ao criar o adapter de bank, err:", err)
 	}
 
-	runSayHelloContinuous(helloAdapter, []string{"Víctor", "Reis", "Cícero", "César", "Pompeu"})
+	runTransferMultiple(bankAdapter, "7835697001zzzz", "7835697002", 5)
+}
+
+func runGetCurrentBalance(adapter *bank.BankAdapter, account string) {
+	bal, err := adapter.GetCurrentBalance(context.Background(), account)
+	if err != nil {
+		log.Fatalln("Erro ao chamar o serviço de bank, err:", err)
+	}
+
+	log.Println("Saldo atual da conta:", bal)
+}
+
+func runFetchExchangeRates(adapter *bank.BankAdapter, fromCur, toCur string) {
+	ctx := context.Background()
+	log.Println("Fetching exchange rates from", fromCur, "to", toCur)
+	log.Println("ctx:", ctx)
+	adapter.FetchExchangeRates(ctx, fromCur, toCur)
+}
+
+func runSummarizeTransactions(adapter *bank.BankAdapter, account string, dummyTransactions int) {
+	var tx []*domainBank.Transaction
+
+	for i := 1; i <= dummyTransactions; i++ {
+		tranType := domainBank.TransactionTypeIn
+
+		if i%3 == 0 {
+			tranType = domainBank.TransactionTypeOut
+		}
+
+		t := &domainBank.Transaction{
+			Amount:          float64(rand.Intn(500) + 10),
+			TransactionType: tranType,
+			Notes:           fmt.Sprintf("Transação de teste %d", i),
+		}
+
+		tx = append(tx, t)
+	}
+
+	adapter.SummarizeTransactions(context.Background(), account, tx)
 }
 
 func runSayHello(adapter *hello.HelloAdapter, name string) {
@@ -40,6 +81,23 @@ func runSayHello(adapter *hello.HelloAdapter, name string) {
 	}
 
 	log.Println("Resposta do serviço de hello:", greet.Message)
+}
+
+func runTransferMultiple(adapter *bank.BankAdapter, fromAcc, toAcc string, numDummyTransactions int) {
+	var trf []domainBank.TransferTransaction
+
+	for i := 1; i <= numDummyTransactions; i++ {
+		t := domainBank.TransferTransaction{
+			FromAccountNumber: fromAcc,
+			ToAccountNumber:   toAcc,
+			Currency:          "BRL",
+			Amount:            float64(rand.Intn(200) + 10),
+		}
+
+		trf = append(trf, t)
+	}
+
+	adapter.TransferMultiple(context.Background(), trf)
 }
 
 func runManyHello(adapter *hello.HelloAdapter, name string) {
