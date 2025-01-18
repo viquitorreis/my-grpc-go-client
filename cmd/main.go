@@ -5,13 +5,37 @@ import (
 	"log"
 	"time"
 
-	grpcRetry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	"github.com/sony/gobreaker"
 	"github.com/viquitorreis/my-grpc-go-client/internal/adapter/resiliency"
 	domainResiliency "github.com/viquitorreis/my-grpc-go-client/internal/application/domain/resiliency"
+	reslProto "github.com/viquitorreis/my-grpc-proto/protogen/go/resiliency"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+var circuitBreaker *gobreaker.CircuitBreaker
+
+func initCircuitBreaker() {
+	myBreaker := gobreaker.Settings{
+		Name: "my-circuit-breaker",
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+
+			log.Printf("Circuit breaker failure is %v, requests is %v, means failure ratio: %v\n",
+				counts.TotalFailures, counts.Requests, failureRatio,
+			)
+
+			// failure ratio de 60%
+			return counts.Requests >= 3 && failureRatio >= 0.6
+		},
+		Timeout: 4 * time.Second,
+		OnStateChange: func(name string, from, to gobreaker.State) {
+			log.Printf("Circuit breaker %v changed state, from %v to %v\n\n", name, from, to)
+		},
+	}
+
+	circuitBreaker = gobreaker.NewCircuitBreaker(myBreaker)
+}
 
 func main() {
 	log.SetFlags(0)
@@ -20,29 +44,31 @@ func main() {
 	// Create a new gRPC client
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	opts = append(
-		opts,
-		grpc.WithUnaryInterceptor(
-			grpcRetry.UnaryClientInterceptor(
-				// Vamos usar o retry apenas se for status code Unkown e internal error
-				grpcRetry.WithCodes(codes.Unknown, codes.Internal),
-				grpcRetry.WithMax(4),
-				grpcRetry.WithBackoff(grpcRetry.BackoffExponential(2*time.Second)),
-			),
-		),
-	)
+	// opts = append(
+	// 	opts,
+	// 	grpc.WithUnaryInterceptor(
+	// 		grpcRetry.UnaryClientInterceptor(
+	// 			// Vamos usar o retry apenas se for status code Unkown e internal error
+	// 			grpcRetry.WithCodes(codes.Unknown, codes.Internal),
+	// 			grpcRetry.WithMax(4),
+	// 			grpcRetry.WithBackoff(grpcRetry.BackoffExponential(2*time.Second)),
+	// 		),
+	// 	),
+	// )
 
-	opts = append(
-		opts,
-		grpc.WithStreamInterceptor(
-			grpcRetry.StreamClientInterceptor(
-				// Vamos usar o retry apenas se for status code Unkown e internal error
-				grpcRetry.WithCodes(codes.Unknown, codes.Internal),
-				grpcRetry.WithMax(4),
-				grpcRetry.WithBackoff(grpcRetry.BackoffLinear(3*time.Second)),
-			),
-		),
-	)
+	// opts = append(
+	// 	opts,
+	// 	grpc.WithStreamInterceptor(
+	// 		grpcRetry.StreamClientInterceptor(
+	// 			// Vamos usar o retry apenas se for status code Unkown e internal error
+	// 			grpcRetry.WithCodes(codes.Unknown, codes.Internal),
+	// 			grpcRetry.WithMax(4),
+	// 			grpcRetry.WithBackoff(grpcRetry.BackoffLinear(3*time.Second)),
+	// 		),
+	// 	),
+	// )
+
+	initCircuitBreaker()
 
 	// Connect to gRPC server
 	conn, err := grpc.NewClient("localhost:9090", opts...)
@@ -77,7 +103,13 @@ func main() {
 	// runUnaryResiliency(resiliencyAdapter, 0, 3, []uint32{domainResiliency.UNKNOWN, domainResiliency.OK})
 	// runServerStreamingResiliency(resiliencyAdapter, 0, 3, []uint32{domainResiliency.UNKNOWN})
 	// runClientStreamingResiliency(resiliencyAdapter, 0, 3, []uint32{domainResiliency.UNKNOWN}, 10)
-	runBiDirectionalStreamingResiliency(resiliencyAdapter, 0, 3, []uint32{domainResiliency.UNKNOWN}, 10)
+	// runBiDirectionalStreamingResiliency(resiliencyAdapter, 0, 3, []uint32{domainResiliency.UNKNOWN}, 10)
+
+	// === CIRCUIT BREAKER ===
+	for i := 0; i < 300; i++ {
+		runUnaryResiliencyWithCircuitBreaker(resiliencyAdapter, 0, 0, []uint32{domainResiliency.UNKNOWN, domainResiliency.OK})
+		time.Sleep(time.Second)
+	}
 }
 
 // func runGetCurrentBalance(adapter *bank.BankAdapter, account string) {
@@ -243,4 +275,18 @@ func runClientStreamingResiliency(adapter *resiliency.ResiliencyAdapter, minDela
 
 func runBiDirectionalStreamingResiliency(adapter *resiliency.ResiliencyAdapter, minDelaySecond, maxDelaySecond int32, statusCodes []uint32, count int) {
 	adapter.BidirectionalStreamingResiliency(context.Background(), minDelaySecond, maxDelaySecond, statusCodes, count)
+}
+
+func runUnaryResiliencyWithCircuitBreaker(adapter *resiliency.ResiliencyAdapter, minDelaySecond, maxDelaySecond int32, statusCodes []uint32) {
+	cBreakerRes, cBreakerErr := circuitBreaker.Execute(
+		func() (interface{}, error) {
+			return adapter.UnaryResiliency(context.Background(), minDelaySecond, maxDelaySecond, statusCodes)
+		},
+	)
+
+	if cBreakerErr != nil {
+		log.Println("Failed to call UnaryResiliency:", cBreakerErr)
+	} else {
+		log.Println(cBreakerRes.(*reslProto.ResiliencyReponse).DummyString)
+	}
 }
