@@ -11,12 +11,14 @@ import (
 )
 
 type ResiliencyAdapter struct {
-	resiliencyClientPort port.ResiliencyClientPort
+	resiliencyClientPort         port.ResiliencyClientPort
+	resiliencyClientWithMetadata port.ResiliencyWithMetadataServiceClientPort
 }
 
 func NewResiliencyAdapter(conn *grpc.ClientConn) (*ResiliencyAdapter, error) {
 	return &ResiliencyAdapter{
-		resiliencyClientPort: resiliency.NewResiliencyServiceClient(conn),
+		resiliencyClientPort:         resiliency.NewResiliencyServiceClient(conn),
+		resiliencyClientWithMetadata: resiliency.NewResiliencyWithMetadataServiceClient(conn),
 	}, nil
 }
 

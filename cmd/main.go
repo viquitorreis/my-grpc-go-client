@@ -106,10 +106,15 @@ func main() {
 	// runBiDirectionalStreamingResiliency(resiliencyAdapter, 0, 3, []uint32{domainResiliency.UNKNOWN}, 10)
 
 	// === CIRCUIT BREAKER ===
-	for i := 0; i < 300; i++ {
-		runUnaryResiliencyWithCircuitBreaker(resiliencyAdapter, 0, 0, []uint32{domainResiliency.UNKNOWN, domainResiliency.OK})
-		time.Sleep(time.Second)
-	}
+	// for i := 0; i < 300; i++ {
+	// 	runUnaryResiliencyWithCircuitBreaker(resiliencyAdapter, 0, 0, []uint32{domainResiliency.UNKNOWN, domainResiliency.OK})
+	// 	time.Sleep(time.Second)
+	// }
+
+	runUnaryResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK})
+	runServerStreamingResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK})
+	runClientStreamingResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK}, 10)
+	runBiDirectionalStreamResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK}, 10)
 }
 
 // func runGetCurrentBalance(adapter *bank.BankAdapter, account string) {
@@ -231,7 +236,7 @@ func runUnaryResiliencyWithTimeout(adapter *resiliency.ResiliencyAdapter, minDel
 
 	res, err := adapter.UnaryResiliency(ctx, minDelaySecond, maxDelaySecond, statusCodes)
 	if err != nil {
-		log.Fatalln("Failed to call UnaryResiliency: ", err)
+		log.Fatalln("Failed to call runUnaryResiliencyWithTimeout: ", err)
 	}
 
 	log.Println(res.DummyString)
@@ -285,8 +290,29 @@ func runUnaryResiliencyWithCircuitBreaker(adapter *resiliency.ResiliencyAdapter,
 	)
 
 	if cBreakerErr != nil {
-		log.Println("Failed to call UnaryResiliency:", cBreakerErr)
+		log.Println("Failed to call Circuit Breaker UnaryResiliency:", cBreakerErr)
 	} else {
 		log.Println(cBreakerRes.(*reslProto.ResiliencyReponse).DummyString)
 	}
+}
+
+func runUnaryResiliencyWithMetadata(adapter *resiliency.ResiliencyAdapter, minDelaySecond, maxDelaySecond int32, statusCodes []uint32) {
+	res, err := adapter.UnaryResiliencyWithMetadata(context.Background(), minDelaySecond, maxDelaySecond, statusCodes)
+	if err != nil {
+		log.Fatalln("Failed to call runUnaryResiliencyWithMetadata: ", err)
+	}
+
+	log.Println(res.DummyString)
+}
+
+func runServerStreamingResiliencyWithMetadata(adapter *resiliency.ResiliencyAdapter, minDelaySecond, maxDelaySecond int32, statusCodes []uint32) {
+	adapter.ServerStreamingResiliencyWithMetadata(context.Background(), minDelaySecond, maxDelaySecond, statusCodes)
+}
+
+func runClientStreamingResiliencyWithMetadata(adapter *resiliency.ResiliencyAdapter, minDelaySecond int32, maxDelaySecond int32, statusCodes []uint32, count int) {
+	adapter.ClientStreamResiliencyWithMetadata(context.Background(), minDelaySecond, maxDelaySecond, statusCodes, count)
+}
+
+func runBiDirectionalStreamResiliencyWithMetadata(adapter *resiliency.ResiliencyAdapter, minDelaySecond, maxDelaySecond int32, statusCodes []uint32, count int) {
+	adapter.BidirectionalStreamResiliencyWithMetadata(context.Background(), minDelaySecond, maxDelaySecond, statusCodes, count)
 }
