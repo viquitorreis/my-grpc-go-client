@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/sony/gobreaker"
+	"github.com/viquitorreis/my-grpc-go-client/internal/adapter/hello"
 	"github.com/viquitorreis/my-grpc-go-client/internal/adapter/resiliency"
 	domainResiliency "github.com/viquitorreis/my-grpc-go-client/internal/application/domain/resiliency"
+	"github.com/viquitorreis/my-grpc-go-client/internal/interceptor"
 	reslProto "github.com/viquitorreis/my-grpc-proto/protogen/go/resiliency"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -70,12 +72,35 @@ func main() {
 
 	initCircuitBreaker()
 
+	opts = append(opts,
+		grpc.WithChainUnaryInterceptor(
+			interceptor.LogUnaryClientInterceptor(),
+			interceptor.BasicUnaryServerInterceptor(),
+			interceptor.TimeoutUnaryClientInterceptor(5*time.Second),
+		),
+	)
+
+	opts = append(opts,
+		grpc.WithChainStreamInterceptor(
+			interceptor.LogStreamClientInterceptor(),
+			interceptor.BasicClientStreamInterceptor(),
+			interceptor.TimeoutStreamClientInterceptor(15*time.Second),
+		),
+	)
+
 	// Connect to gRPC server
 	conn, err := grpc.NewClient("localhost:9090", opts...)
 	if err != nil {
 		log.Fatalln("Erro ao conectar com o servidor gRPC, err:", err)
 	}
 	defer conn.Close()
+
+	helloAdapter, err := hello.NewHelloAdapter(conn)
+	if err != nil {
+		log.Fatalln("Can not create Hello Adapter: ", err)
+	}
+
+	runSayHello(helloAdapter, "Victor Reis")
 
 	resiliencyAdapter, err := resiliency.NewResiliencyAdapter(conn)
 	if err != nil {
@@ -111,9 +136,9 @@ func main() {
 	// 	time.Sleep(time.Second)
 	// }
 
-	runUnaryResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK})
-	runServerStreamingResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK})
-	runClientStreamingResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK}, 10)
+	// runUnaryResiliencyWithMetadata(resiliencyAdapter, 0, 3, []uint32{domainResiliency.OK})
+	// runServerStreamingResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK})
+	// runClientStreamingResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK}, 10)
 	runBiDirectionalStreamResiliencyWithMetadata(resiliencyAdapter, 0, 1, []uint32{domainResiliency.OK}, 10)
 }
 
@@ -155,14 +180,14 @@ func main() {
 // 	adapter.SummarizeTransactions(context.Background(), account, tx)
 // }
 
-// func runSayHello(adapter *hello.HelloAdapter, name string) {
-// 	greet, err := adapter.SayHello(context.Background(), name)
-// 	if err != nil {
-// 		log.Fatalln("Erro ao chamar o serviço de hello, err:", err)
-// 	}
+func runSayHello(adapter *hello.HelloAdapter, name string) {
+	greet, err := adapter.SayHello(context.Background(), name)
+	if err != nil {
+		log.Fatalln("Erro ao chamar o serviço de hello, err:", err)
+	}
 
-// 	log.Println("Resposta do serviço de hello:", greet.Message)
-// }
+	log.Println("Resposta do serviço de hello:", greet.Message)
+}
 
 // func runTransferMultiple(adapter *bank.BankAdapter, fromAcc, toAcc string, numDummyTransactions int) {
 // 	var trf []domainBank.TransferTransaction
